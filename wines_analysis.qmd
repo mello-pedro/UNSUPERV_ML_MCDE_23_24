@@ -1,0 +1,1276 @@
+---
+title: "PROJETO FINAL - APRENDIZAGEM NÃO SUPERVISIONADA"
+subtitle: "Aplicação de técnivas de Análise dos Componentes Principais e Análise de Clusters ao conjunto de dados WINE" 
+author:
+  - Pedro Henrique Mello Pereira - 230353025
+  - Bernardo Miguel Esperança Sousa - 230353006
+  - Patricia da Silva Alves Schutz - 230353022
+format: 
+  pdf:
+    toc: true
+    toc-title: "Sumário"
+    toc-depth: 3
+    keep-tex: true
+    include-in-header:
+      text: |
+        \usepackage[auth-lg]{authblk}
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+{{< pagebreak >}}
+
+```{r, include = FALSE}
+if(!("pacman" %in% installed.packages())){install.packages("pacman")}
+```
+
+```{r setup, include = FALSE}
+pacman::p_load(tidyverse, tidymodels, kableExtra, broom, corrplot, plotrix, lmtest, psych, car, phia, cowplot, leaps, corrplot, ggplot2, DataExplorer, readxl, skimr, gridExtra, graphics, cluster, factoextra)
+```
+
+# Secção 1 - Introdução:
+
+Este trabalho tem como objectivo aplicar técnicas de aprendizagem não supervisionada na análise do data set "Wine" disponível no UCI Machine Learning Repository. Utilizaremos métodos de clusterização, como k-means e clusterização hierárquica, bem como análise de componentes principais (PCA) para reduzir a dimensionalidade dos dados e facilitar a interpretação. O data set "Wine" contém 178 amostras de vinho de três cultivares diferentes, descritas por 13 variáveis que incluem medidas químicas como acidez, álcool, magnésio e fenóis.
+
+Para determinar o número ideal de clusters, serão utilizadas técnicas como o silhouette score e a curva de elbow, que ajudam a avaliar a coesão e a separação dos clusters formados. A padronização dos dados será considerada para garantir que todas as variáveis contribuam de maneira equitativa na formação dos clusters. A clusterização hierárquica será visualizada através de dendrogramas, permitindo uma análise mais intuitiva das relações hierárquicas entre as amostras de vinho.
+
+A análise de componentes principais (PCA) será empregada como uma técnica de redução de dimensionalidade, visando identificar as combinações lineares das variáveis originais que mais explicam a variância dos dados. O critério de Kaiser (Kaiser criterion) e a proporção de variância explicada serão utilizados para determinar o número adequado de componentes principais a serem retidos. Esta etapa é essencial para simplificar a estrutura dos dados, mantendo a maior quantidade de informação possível.
+
+Finalmente, os resultados obtidos a partir das diferentes abordagens de aprendizagem não supervisionada serão comparados e discutidos. Através desta análise, esperamos identificar padrões e relações subjacentes no conjunto de dados de vinhos, fornecendo insights valiosos sobre as características que distinguem os diferentes cultivares. Este estudo demonstrará a aplicação prática de técnicas de clusterização e PCA, contribuindo para um melhor entendimento das propriedades dos vinhos analisados e das técnicas de aprendizagem não supervisionada.
+
+## Definição dos objectivos:
+
+A aprendizagem não supervisionada é uma categoria de algoritmos que busca encontrar padrões e estruturas subjacentes em dados sem o uso de rótulos ou respostas predefinidas. O principal objectivo deste trabalho é aplicar essas técnicas para identificar agrupamentos naturais e padrões no data set "Wine". 
+
+Especificamente, buscaremos agrupar as amostras de vinho de maneira que vinhos semelhantes sejam colocados no mesmo cluster, enquanto vinhos diferentes sejam separados em clusters distintos. Para tanto, testaremos diferentes técnicas e algoritmos de clusterização como o K-Means e a Clusterização hierárquica.
+
+Ademais, a análise de componentes principais (ACP) será utilizada com dois objectivos principais. Primeiro, reduzir a dimensionalidade do conjunto de dados, facilitando a visualização e interpretação dos clusters formados. Segundo, identificar as variáveis que mais contribuem para a variação total dos dados, fornecendo insights sobre as características mais importantes que diferenciam os vinhos. Esta abordagem permite simplificar a complexidade dos dados originais sem perder informações cruciais.
+
+## Apresentação do conjunto de dados e identificação das variáveis dependente e independentes:
+
+O data set "Wine" utilizado neste estudo contém 178 amostras de vinho provenientes de três diferentes cultivares na região da Itália. Cada amostra é descrita por 13 variáveis químicas que incluem níveis de acidez, álcool, magnésio, fenóis, entre outros.
+
+A seguir apresentamos o dicionário das variáveis presentes no conjunto de dados, as quais utilizaremos como como base para a aplicação das técnicas de clusterização e ACP, a saber:
+
+```{=tex}
+\begin{itemize}
+  \item \textbf{Cultivars}: Tipo ou casta do vinho (1: Barolo, 2: Grignolino, 3: Barbera).
+  \item \textbf{Alcohol}: Teor alcoólico do vinho (%).
+  \item \textbf{Malic Acid}: Quantidade de ácido málico (g/L).
+  \item \textbf{Ash}: Conteúdo de cinzas (g/100mL).
+  \item \textbf{Alcalinity of Ash}: Alcalinidade das cinzas (mEq/L).
+  \item \textbf{Magnesium}: Quantidade de magnésio (mg/L).
+  \item \textbf{Total Phenols}: Quantidade total de fenóis (g/L).
+  \item \textbf{Flavanoids}: Quantidade de flavonoides (g/L).
+  \item \textbf{Nonflavanoid Phenols}: Quantidade de fenóis não flavonoides (g/L).
+  \item \textbf{Proanthocyanins}: Quantidade de proantocianinas (g/L).
+  \item \textbf{Color Intensity}: Intensidade da cor do vinho (medida espectrofotométrica).
+  \item \textbf{Hue}: Matiz do vinho (medida espectrofotométrica).
+  \item \textbf{OD280/OD315 of Diluted Wines}: Razão da absorbância a 280 nm e 315 nm (indicador de compostos fenólicos).
+  \item \textbf{Proline}: Quantidade de prolina (mg/L), um aminoácido presente no vinho.
+\end{itemize}
+
+```
+### Visão das 5 primeiras entradas do Data set Wine:
+
+```{r}
+
+#Lendo e fazendo uma primeira observação das variáveis
+df_wine <- read_excel("/Users/pedroh.mello/Desktop/MESTRADO_MCDE/ML NAO SUPERVISIONADO/PROJETO_FINAL/WinesClustering.xlsx")
+
+df_wine %>%
+  head() %>%
+  kable(format = "latex", booktabs = TRUE, longtable = TRUE) %>%
+  kable_styling(font_size = 3.5,  latex_options = c("striped", "scale_down"), stripe_color = "gray!15") %>%
+  column_spec(2, width = "0.5cm")
+  
+
+```
+
+### Metadados do data set objeto do presente estudo:
+
+Usando a função "summary" do pacote dplyr, explicitaremos um panorama geral sobre o conjunto de dados em questão, bem como algumas estatísticas descritivas breves:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Cultivars & Alcohol & Malic\_Acid & Ash & Ash\_Alcanity \\
+\hline
+1:59 & Min. :11.03 & Min. :0.740 & Min. :1.360 & Min. :10.60 \\
+2:71 & 1st Qu.:12.36 & 1st Qu.:1.603 & 1st Qu.:2.210 & 1st Qu.:17.20 \\
+3:48 & Median :13.05 & Median :1.865 & Median :2.360 & Median :19.50 \\
+ & Mean :13.00 & Mean :2.336 & Mean :2.367 & Mean :19.49 \\
+ & 3rd Qu.:13.68 & 3rd Qu.:3.083 & 3rd Qu.:2.558 & 3rd Qu.:21.50 \\
+ & Max. :14.83 & Max. :5.800 & Max. :3.230 & Max. :30.00 \\
+\hline
+Total\_Phenols & Flavanoids & Nonflavanoid\_Phenols & Proanthocyanins & Color\_Intensity \\
+\hline
+Min. :0.980 & Min. :0.340 & Min. :0.1300 & Min. :0.410 & Min. : 1.280 \\
+1st Qu.:1.742 & 1st Qu.:1.205 & 1st Qu.:0.2700 & 1st Qu.:1.250 & 1st Qu.: 3.220 \\
+Median :2.355 & Median :2.135 & Median :0.3400 & Median :1.555 & Median : 4.690 \\
+Mean :2.295 & Mean :2.029 & Mean :0.3619 & Mean :1.591 & Mean : 5.058 \\
+3rd Qu.:2.800 & 3rd Qu.:2.875 & 3rd Qu.:0.4375 & 3rd Qu.:1.950 & 3rd Qu.: 6.200 \\
+Max. :3.880 & Max. :5.080 & Max. :0.6600 & Max. :3.580 & Max. :13.000 \\
+\hline
+Hue & OD280 & Proline & Magnesium &  \\
+\hline
+Min. :0.4800 & Min. :1.270 & Min. : 278.0 &  Min. : 70.00 &  \\
+1st Qu.:0.7825 & 1st Qu.:1.938 & 1st Qu.: 500.5 & 1st Qu.: 88.00 &  \\
+Median :0.9650 & Median :2.780 & Median : 673.5 & Median : 98.00 &  \\
+Mean :0.9574 & Mean :2.612 & Mean : 746.9 & Mean : 99.74 &  \\
+3rd Qu.:1.1200 & 3rd Qu.:3.170 & 3rd Qu.: 985.0 & 3rd Qu.:107.00 &  \\
+Max. :1.7100 & Max. :4.000 & Max. :1680.0 & Max. :162.00 &  \\
+\hline
+\end{tabular}
+\caption{Descrição dos dados.}
+\label{tab:dados}
+\end{table}
+
+
+**Como podemos perceber, trata-se de um data set com poucas observações, a saber 178 linhas e 14 colunas.**
+
+
+Quanto à presença de valores nulos, conforme depreende-se da análise da figura a seguir, o conjunto de dados encontra-se completo e não apresenta valores nulos ou a preencher, sendo este um importante indicador a respeito da qualidade dos dados.
+
+```{r, fig.align='center'}
+missing_data <- df_wine %>%
+  summarise_all(~ sum(is.na(.))) %>%
+  pivot_longer(everything(), names_to = "Coluna", values_to = "Valores Ausentes")
+
+missing_data %>%
+  kable(format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Contagem de Valores Ausentes") %>%
+  kable_styling(font_size = 8, latex_options = c("striped", "scale_down"), stripe_color = "gray!15") %>%
+  column_spec(2, width = "1cm")
+```
+
+Na próxima Secção realizaremos o tratamento dos dados, com vistas a tornar possível a análise exploratória do conjunto de observações e posterior aplicação das técnicas de aprendizagem não supervisionada.
+
+
+## Secção 2 - Limpeza e Tratamento dos dados:
+
+Em termos de limpeza propriamente dita, não há muito a ser feito haja vista que os dados são compostos por poucas entradas, não havendo nulidades ou anomalias aparentes. 
+
+Entretanto, é necessário que se realize uma etapa de tratamento dos dados, o que faremos a partir de então. Como primeira medida, realizamos a conversão das variáveis para os tipos corretos. A Única coluna do conjunto de dados que possui o tipo categórico é "Cultivars". As demais são todas numéricas. Desta feita, foi feita a conversão para os tipos corretos de maneira a evitar problemas mais à frente quando da standardização dos dados.
+
+Em seguida, atuamos na identificação de possíveis entradas duplicadas no data set, recebendo como resultado 0 entradas duplicadas, tendo-se afastado portanto a necessidade de eliminar alguma observção em duplicidade.
+
+```{r}
+#converter Cultivars para categórica
+df_wine <- df_wine %>%
+  mutate(Cultivars = factor(Cultivars))
+
+#converter as demais vars para num
+df_wine <- df_wine %>%
+  mutate(across(-Cultivars, as.numeric))
+
+# valores duplicados
+df_wine <- df_wine %>%
+  distinct()
+```
+
+### Busca por outliers:
+
+Após a etapa de eliminacão de busca porvalores duplicados e correção dos tipos das variáveis, é importante atentarmo-nos para a existência de outliers, que são valores que se afastam significativamente da maioria dos outros valores num conjunto de dados. Eles podem distorcer análises estatísticas e modelos, de modo a exercer influências indesejadas nos resultados.
+
+```{r, fig.height=13, fig.width=11, fig.align='center', fig.cap = "Distribuições com Outliers"}
+# Definir as variáveis numéricas
+num_var <- c('Alcohol', 'Malic_Acid', 'Ash', 'Ash_Alcanity', 'Magnesium', 
+             'Total_Phenols', 'Flavanoids', 'Nonflavanoid_Phenols', 
+             'Proanthocyanins', 'Color_Intensity', 'Hue', 'OD280', 'Proline')
+
+# Plotar os boxplots
+boxplots_list <- lapply(num_var, function(var) {
+  ggplot(df_wine, aes_string(y = var)) +
+    stat_boxplot(geom = "errorbar", width = 0.5) +
+    geom_boxplot(outlier.colour = "blue", fill = "grey", outlier.shape = 16,
+                 outlier.size = 2, notch = FALSE) +
+    theme(legend.position = "bottom", plot.title = element_text(size = 8)) +
+    labs(y = var, x = "") +
+    ggtitle(paste("Box plot da distribuição de", var))
+})
+
+# Organizar os boxplots em 3 linhas e 2 colunas
+grid.arrange(grobs = boxplots_list, ncol = 3, nrow = 5)
+
+```
+
+{{< pagebreak >}}
+
+Conforme depreende-se da análise dos boxplots, as variáveis 'malic acid', 'ash', 'ash alcalinity', 'magnesium', 'Proanthocyanins', 'color intensity' e 'hue' apresentaram outliers em sua composição. A presença de outliers pode representar um risco para a correta execução da análise de clusters e do ACP, sendo uma boa prática a retirada destes valores.
+
+Entretanto, haja vista ser um data set que possui poucas observações, optaremos aqui pela não exclusào destes outliers, de modo a não reduzir ainda mais o universo de observações.
+
+Ademais, em virtude do presente trabalho ser um laboratório para experimentação, utilizaremos outras técnicas como por exemplo a regularização dos dados e a comparação entre single/complete/average linkage para analisar o quão eficazes são no auxílio à regularização destes valores desviantes.
+
+Após a finalização da limpeza dos dados, vamos salvá-los em um novo ficheiro o qual chamaremos de "wine_clean" e que será utilizado de agora em diante na análise exploratória e modelagem.
+
+```{r}
+#Salvar os dados limpos em um novo ficheiro csv
+write.csv(df_wine, "wine_clean.csv", row.names = FALSE)
+```
+
+## Secção 3 - Análise Exploratória dos Dados
+
+Ao implementar as etapas de limpeza anteriores, criamos um conjunto de dados mais refinado e confiável, estabelecendo a base para nossa subsequente análise exploratória de dados (AED), de modo a preparar os dados para aplicação dos algoritmos de aprendizagem não supervisionada. O tratamento cuidadoso dos problemas de qualidade dos dados é crucial para garantir a precisão e confiabilidade dos insights que serão derivados do conjunto de dados.
+
+Prosseguindo, o foco neste momento será na Análise Exploratória de Dados (AED) para obter insights mais profundos sobre os diferentes tipos de vinhos. Esta fase analítica tem como objectivo descobrir tendências significativas, correlações e padrões dentro do conjunto de dados.
+
+### Matriz de correlação de Pearson
+
+Neste momento plotaremos a matriz de correlação de Pearson entre as variáveis numéricas do data set wine.
+
+A correlação de Pearson é uma medida estatística que avalia a relação linear entre duas variáveis contínuas. **Essa medida varia de -1 a 1, onde um valor próximo de 1 indica uma forte correlação positiva, um valor próximo de -1 indica uma forte correlação negativa e um valor próximo de 0 indica ausência de correlação linear.** Em outras palavras, a correlação de Pearson quantifica a direção e a força da relação linear entre duas variáveis, sendo amplamente utilizada para determinar o grau de associação entre diferentes conjuntos de dados.
+{{< pagebreak >}}
+
+A ideia aqui é tentar visualizar se existe alguma correlação linear, seja ela positiva ou negativa, entre as variáveis do conjunto de dados.
+
+```{r, fig.height=10, fig.width=10}
+
+#Carregar os dados limpos do ficheiro
+wine_clean <- read.csv("wine_clean.csv", header = TRUE)
+
+#xcluir a variável "cultivars" dos dados
+wine_clean_subset <- wine_clean[, -which(names(wine_clean) == "Cultivars")]
+
+# Calcular a matriz de correlação
+correlation_matrix <- cor(wine_clean_subset, method = "pearson")
+
+# Converter a matriz em um data frame
+correlation_df <- as.data.frame(as.table(correlation_matrix))
+names(correlation_df) <- c("Var1", "Var2", "Correlation")
+
+# Plot da matriz de correlação como um heatmap
+ggplot(correlation_df, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", 
+                       midpoint = 0, limits = c(-1, 1), 
+                       name = "Correlação de Pearson") +
+  geom_text(aes(label = round(Correlation, 2)), size = 2, color = "black") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = NULL, y = NULL, title = "Matriz de Correlação") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+{{< pagebreak >}}
+Consideraremos os níveis de correlação encontrados de acordo com a tabela seguir para balizar a nossa interpretação dos valores:
+
+| Intervalo de Correlação | Interpretação                    |
+|-------------------------|----------------------------------|
+| -1.0 a -0.71             | Correlação negativa muito forte  |
+| -0.7 a -0.51             | Correlação negativa forte        |
+| -0.5 a -0.31             | Correlação negativa moderada     |
+| -0.3 a -0.11             | Correlação negativa fraca        |
+| -0.1 a 0                | Correlação negativa muito fraca  |
+| 0 a 0.1                 | Correlação positiva muito fraca  |
+| 0.11 a 0.3               | Correlação positiva fraca        |
+| 0.31 a 0.5               | Correlação positiva moderada     |
+| 0.51 a 0.7               | Correlação positiva forte        |
+| 0.71 a 1.0               | Correlação positiva muito forte  |
+
+
+Haja vista tratar-se de um número significativo de variáveis, comentaremos apenas a respeito daquelas correlações que parecem ser fortes ou muito fortes, tanto negativas quanto positivas.
+
+Além disso, **a variável CULTIVARS não será considerada na análise de correlação por se tratar da única variável categórica existente no conjunto de dados, não sendo portanto correto analisá-la sob o prisma do coeficiente de correlação de Pearson.**
+
+- Alcohol:
+  Apresenta correlação linear positiva forte com Color_intensity(0.55) e Proline(0.64), de modo a demonstrar que à medida que os valores para uma dessas variáveis aumenta, a outra variável também terá um acréscimo em seu valor;
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear negativa forte com nenhum dos demais atributos;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com Color_intensity
+ggplot(wine_clean, aes(x = Alcohol, y = Color_Intensity)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Alcohol e Color_intensity")
+
+# Scatterplot com Proline
+ggplot(wine_clean, aes(x = Alcohol, y = Proline)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Alcohol e Proline") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+- Malic_Acid: 
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear positiva forte com nenhum dos demais atributos;
+  Apresenta correlação linear negativa forte com Hue, de -0.56. Isto demonstra que à medida que os valores para uma dessas variáveis aumenta, a outra variável tende a apresentar uma diminuição em seu valor;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com hue
+ggplot(wine_clean, aes(x = Malic_Acid, y = Hue)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Correlação Linear entre Malic_Acid e Hue") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+- Ash:
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear positiva ou negativa forte com nenhum dos demais atributos;
+
+
+- Ash_Alcanity:
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear positiva ou negativa forte com nenhum dos demais atributos;
+
+- Magnesium:
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear positiva ou negativa forte com nenhum dos demais atributos;
+
+
+- Total_Phenols:
+  Apresenta correlação linear positiva muito forte com Flavanoids, de 0.86, e forte com Proanthocyanins(0.61) e OD280(0.7) de modo a demonstrar que à medida que os valores para uma dessas variáveis aumenta, a outra variável também terá um acréscimo em seu valor;
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear negativa forte com nenhum dos demais atributos;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com Flavanoids
+ggplot(wine_clean, aes(x = Total_Phenols, y = Flavanoids)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Total_Phenols e Flavanoids") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Proanthocyanins
+ggplot(wine_clean, aes(x = Total_Phenols, y = Proanthocyanins)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Total_Phenols e Proanthocyanins") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com OD280
+ggplot(wine_clean, aes(x = Total_Phenols, y = OD280)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Total_Phenols e OD280") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+- Flavanoids:
+  Conforme demonstrado anteriormente, apresenta correlação linear positiva muito forte com Total_Phenols (0.86) e OD280(0.79), Além de forte correlação linear positiva com Proanthocyanins(0.65) e Hue(0.54) de modo a demonstrar que à medida que os valores para uma dessas variáveis aumenta, a outra variável também terá um acréscimo em seu valor;
+  Apresenta correlação linear negativa forte com Nonflavanoid_Phenols, de -0.54. Isto demonstra que à medida que os valores para uma dessas variáveis aumenta, a outra variável tende a apresentar uma diminuição em seu valor;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com Total_Phenols
+ggplot(wine_clean, aes(x = Flavanoids, y = Total_Phenols)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Flavanoids e Total_Phenols") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com OD280
+ggplot(wine_clean, aes(x = Flavanoids, y = OD280)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Flavanoids e OD280") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Proanthocyanins
+ggplot(wine_clean, aes(x = Flavanoids, y = Proanthocyanins)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Flavanoids e Proanthocyanins") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Hue
+ggplot(wine_clean, aes(x = Flavanoids, y = Hue)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Flavanoids e Hue") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Nonflavanoid_Phenols
+ggplot(wine_clean, aes(x = Flavanoids, y = Nonflavanoid_Phenols)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Correlação Linear entre Flavanoids e Nonflavanoid_Phenols") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+- Nonflavanoid_Phenols:
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear positiva forte com nenhum dos demais atributos;
+  Quanto à correlação linear negativa, como era de se esperar em virtude de suas naturezas antagônicas, o atributo em questão demonstra uma forte correlação linear negativa com a variável flavanoid, de -0.54.
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+
+ggplot(wine_clean, aes(x = Nonflavanoid_Phenols, y = Flavanoids)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Correlação Linear entre Nonflavanoid_Phenols e Flavanoids") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+- Proanthocyanins: 
+  Apresenta correlação linear positiva forte com Total_Phenols (0.61), Flavanoids(0.65) e OD280(0.52), de modo a demonstrar que à medida que os valores para uma dessas variáveis aumenta, a outra variável também terá um acréscimo em seu valor;
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear negativa forte com nenhum dos demais atributos;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com Total_Phenols
+ggplot(wine_clean, aes(x = Proanthocyanins, y = Total_Phenols)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Proanthocyanins e Total_Phenols") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Flavanoids
+ggplot(wine_clean, aes(x = Proanthocyanins, y = Flavanoids)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Proanthocyanins e Flavanoids") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com OD280
+ggplot(wine_clean, aes(x = Proanthocyanins, y = OD280)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Proanthocyanins e OD280") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+- Color_Intensity:
+  Apresentou forte correlação positiva com Alcohol, de 0.55, de modo a nos dizer que quanto mais intensa a cor do vinho, possivelmente maiorserá o seu teor Alcóolico. De outro modo, apresentou correlação linear negativa for (-0.52) com hue, assim sendo à medida que os valores para uma dessas variáveis aumenta, a outra variável tende a apresentar uma diminuição em seu valor.
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com Alcohol
+ggplot(wine_clean, aes(x = Color_Intensity, y = Alcohol)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Color_Intensity e Alcohol") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Hue
+ggplot(wine_clean, aes(x = Color_Intensity, y = Hue)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Correlação Linear entre Color_Intensity e Hue") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+- Hue:
+  Apresenta correlação linear positiva forte com Flavanoids(0.54) e OD280(0.57), de modo a demonstrar que à medida que os valores para uma dessas variáveis aumenta, a outra variável também terá um acréscimo em seu valor;
+  Apresenta correlação linear negativa forte com Malic_Acid, de -0.56 e Color_Intensity, de -0.52. Isto demonstra que à medida que os valores para uma dessas variáveis aumenta, a outra variável tende a apresentar uma diminuição em seu valor;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com Flavanoids
+ggplot(wine_clean, aes(x = Hue, y = Flavanoids)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Hue e Flavanoids") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com OD280
+ggplot(wine_clean, aes(x = Hue, y = OD280)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Hue e OD280") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Malic_Acid
+ggplot(wine_clean, aes(x = Hue, y = Malic_Acid)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Correlação Linear entre Hue e Malic_Acid") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Color_Intensity
+ggplot(wine_clean, aes(x = Hue, y = Color_Intensity)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Correlação Linear entre Hue e Color_Intensity") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+- OD280:
+  Apresenta correlação linear positiva forte ou muito forte com Total_Phenols(0.7), Flavanoids(0.79), Proanthocyanins(0.52) e Hue(0.57). Isto nos diz que à medida que os valores para uma dessas variáveis aumenta, a outra variável também terá um acréscimo em seu valor;
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear negativa forte com nenhum dos demais atributos;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+# Scatterplot com Total_Phenols
+ggplot(wine_clean, aes(x = OD280, y = Total_Phenols)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre OD280 e Total_Phenols") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Flavanoids
+ggplot(wine_clean, aes(x = OD280, y = Flavanoids)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre OD280 e Flavanoids") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Proanthocyanins
+ggplot(wine_clean, aes(x = OD280, y = Proanthocyanins)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre OD280 e Proanthocyanins") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Scatterplot com Hue
+ggplot(wine_clean, aes(x = OD280, y = Hue)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre OD280 e Hue") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+- Proline:
+  Demonstrou ter correlação linear positiva forte apenas com o atributo Alcohol, no valor de 0.64, de modo a demonstrar que seus valores apresentam tendência a serem maiores à medida em que Alcohol também é maior.
+  De acordo com as referências interpretativas definidas neste estudo, a variável em questão não apresentou correlação linear negativa forte com nenhum dos demais atributos;
+
+```{r, fig.height=3, fig.width=5, fig.align='center'}
+ggplot(wine_clean, aes(x = Proline, y = Alcohol)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Correlação Linear entre Proline e Alcohol") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+#### Insights importantes advindos das correlações:
+
+Ao analisar as correlações lineares de Pearson entre as variáveis do conjunto de dados do vinho, é possível extrair insights valiosos sobre as relações entre suas características químicas que podem auxiliar o leitor desta análise a escolher um vinho de acordo com estas características, por exemplo. 
+
+A começar pela variável "Alcohol", observa-se uma forte correlação positiva com "Color_intensity" e "Proline", sugerindo que vinhos com teor alcoólico mais elevado tendem a ter uma cor mais intensa e uma maior concentração de prolina, um aminoácido associado à maturação da uva. Isso pode indicar uma relação entre a maturação da uva e o teor alcoólico do vinho, indicando ainda que vinhos com maior concentração deste aminoácido e teor alcóolico mais elevado podem ser mais doces ao paladar se comparados aos demais.
+
+Quanto à variável "Hue", ela diz respeito à tonalidade do vinho apresenta correlação linear positiva forte com "Flavanoids" e "OD280", o que sugere que vinhos com tonalidades mais vibrantes tendem a ter maiores concentrações de flavonoides e um índice de cor mais elevado. Por outro lado, "Hue" demonstra uma correlação negativa forte com "Malic_Acid" e "Color_Intensity", indicando que vinhos com tonalidades mais vibrantes e matizes mais azulados tendem a ter menores níveis de acidez málica.
+
+Outra observação interessante é a relação entre "Total_Phenols" e "Flavanoids". Ambas as variáveis mostram uma correlação positiva muito forte, o que sugere que vinhos com maiores níveis de fenóis totais também tendem a ter maiores concentrações de flavonoides. Isso pode indicar uma relação entre a presença desses compostos e características sensoriais como aroma, sabor e cor do vinho. 
+
+Esses insights fornecem uma compreensão mais profunda das características químicas dos vinhos apresentados no data set em estudo e como elas podem relacionar-se entre si, o que pode ser útil para enólogos e produtores na elaboração e na avaliação da qualidade dos vinhos, bem como para pessoas que gostariam de escolher vinhos que se adequem ao seu gosto.
+
+
+
+## Secção 4 - Aplicação de Métodos de Aprendizagem Não Supervisionada
+
+Após a conclusão das etapas de preparação dos dados e exploração das suas principais características, nos concentraremos a partir deste instante na aplicação de modelos de aprendizagem de máquina não supervisionados, mais precisamente aqueles denominados como Análise dos Componentes Principais (ACP) e Análise de Clusters, para aprofundar ainda mais o conhecimento sobre o conjunto de dados e avançar na busca de padrões intrínsecos - sobretudo no que diz respeito às melhores maneiras de se agrupar estes dados e reduzir a dimensionalidade no que diz respeito ao número de atributos.
+
+A análise dos componentes principais é uma técnica de aprendizagem não supervisionada utilizada para redução de dimensionalidade e identificação de padrões nos dados. O PCA busca representar os dados em um espaço de dimensão menor, preservando a maior parte da variabilidade original. Isso é feito através da transformação dos dados em um novo conjunto de variáveis não correlacionadas, chamadas de componentes principais. 
+
+Os componentes principais são ordenados de forma que o primeiro capture a maior variabilidade nos dados, o segundo capture a segunda maior variabilidade e assim por diante. O PCA é frequentemente usado para visualizar a estrutura dos dados em um espaço de dimensão reduzida, identificar relações entre variáveis e remover redundâncias nos dados. Ele é especialmente útil quando os dados têm muitas variáveis e queremos simplificar a análise enquanto mantemos o máximo de informações possível, sendo este o caso da análise em questão neste trabalho.
+
+A análise de clusters, por sua vez, também pode ser definida como uma técnica de aprendizagem não supervisionada, sendo útil na tarefa de encontrar grupos naturais ou "clusters" nos dados. O objectivo é agrupar objetos de tal forma que objetos dentro do mesmo cluster sejam mais semelhantes entre si do que com objetos de outros clusters. O algoritmo de clustering atribui os dados a clusters com base em medidas de semelhança/dissemelhança. O resultado da análise de clusters pode revelar padrões intrínsecos nos dados, identificar grupos de interesse e facilitar a compreensão da estrutura subjacente dos dados, constituindo-se como uma importante ferramenta na análise exploratória de um conjunto de dados.
+
+Ao longo desta Secção realizaremos uma série de testes com vistas a aplicar os conhecimentos que foram aprendidos em sala de aula durante o trimestre na UC de aprendizagem não supervisionada, de modo a maximizar a eficácia e coerência no uso destes artifícios para melhor representar e entender o conjunto de dados wine.
+
+Desta feita, o objectivo a partir deste momento é desenvolver uma análise de clusters que melhor se adeque aos dados - que aqui chamaremos de wine data set - e para isso passaremos obrigatoriamente por uma etapa de análise dos componentes principais, para saber se essa abordagem potencializa os resultados pretendidos na clusterização.
+
+Testaremos ainda a análise de clusters com uso do algoritmo K-Means e a abordagem hierárquica, com o objectivo de alcançar os melhores resultados possíveis.
+
+
+### 4.1 - Aplicação da Análise dos Componentes Principais (ACP):
+
+A primeira medida a ser empregada diz respeito à aplicação da análise dos componentes principais aos dados originais, **à exceção da variável Cultivars** que será eliminada por conta de sua natureza qualitativa.
+
+Este passo tem por objectivo utilizar a aplicação da ACP aos dados como um procedimento anterior à análise de Clusters, de modo a perceber se os resultados obtidos pela clusterização dos componentes principais são melhores que aqueles obtidos por meio da aplicação do K-Means ou da abordagem hierárquica diretamente aos dados.
+
+Neste primeiro momento, faremos uso do artifício de redução de dimensionalidade aos dados sem centralizá-los ou standarizá-los, e procederemos à análise dos resultados para saber qual o impacto desta decisão.
+
+```{r, fig.cap= "Aplicação do ACP aos dados sem centralização e standardização"}
+# Aplicar o PCA aos dados
+pca <- prcomp(wine_clean_subset, center = FALSE, scale = FALSE)
+
+# Calcular a proporção da variabilidade explicada por cada componente principal
+prop_var <- pca$sdev^2 / sum(pca$sdev^2)
+# Calcular a proporção acumulada da variabilidade explicada
+cumulative_pve <- cumsum(prop_var)
+
+# Plotar a proporção da variância explicada por cada componente principal
+#plot(prop_var, xlab = "Componente Principal",
+#     ylab = "Proporção da Variância Explicada", ylim = c(0, 1),
+#     type = "b")
+
+# Plotar a proporção acumulada da variância explicada
+plot(cumulative_pve, xlab = "Componente Principal",
+     ylab = "Proporção da Variância Explicada Acumulada",
+     ylim = c(0, 1), type = "b")
+
+
+```
+**Vejamos o que ocorre na figura:** Como os dados possuem escalas distintas, a aplicação da centralização e da standardização, que seriam responsáveis por equalizar o peso dos dados quando do cálculo do ACP, se mostra fundamental, haja vista que sem isso as variáveis com maior escala acabam por dominar a análise, de modo a resultar em uma primeira componente principal que captura a maior parte da variância total.
+
+A tabela a seguir mostra a matriz de rotação das 3 primeiras componentes principais, onde é possível enxergar a predominância da escala do componente principal 1 em relação aos demais.
+
+
+```{r}
+# Mostrar as dimensões da matriz de scores
+#dim(pca$x)
+
+# Obter os scores dos três primeiros componentes principais
+pca_scores <- head(pca$x[, 1:3])
+
+# Criar uma tabela com os scores dos três primeiros componentes principais
+kable(pca_scores, format = "latex", booktabs = TRUE, caption = "Scores dos Três Primeiros Componentes Principais") %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down")) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1:3, width = "3cm")
+```
+
+#### 4.1.1 - Aplicação da Análise dos Componentes Principais (ACP) aos dados centralizados e standardizados:
+
+**CENTRALIZAR** os dados significa ajustar cada variável para que sua média seja igual a zero. Por exemplo, para uma variável $(X)$, a versão centralizada $(X_{\text{centr}})$ é dada por:
+
+$$ X_{\text{centr}} = X - \bar{X}$$
+
+onde $(\bar{X})$ é a média de $(X)$.
+
+**STANDARDIZAR** os dados por sua vez vai um passo além da centralização e ajusta cada variável para que sua média seja zero e seu desvio padrão seja um. Para uma variável $(X)$, a versão standardizada $(X_{\text{standard}})$ é dada por:
+
+$$ 
+X_{\text{standard}} = \frac{X - \bar{X}}{s_X}
+$$
+
+onde $(\bar{X})$ é a média de $(X)$ e $(s_X)$ é o desvio padrão de $(X)$.
+
+
+Apresentamos a seguir os resultados da ACP após realização dos procedimentos retromencionados, a saber:
+
+
+
+```{r, fig.cap= "Aplicação do ACP aos dados Centralizados e Standardizados"}
+# Aplicar o PCA aos dados
+pca1 <- prcomp(wine_clean_subset, center = TRUE, scale = TRUE)
+
+# Calcular a proporção da variabilidade explicada por cada componente principal
+prop_var1 <- pca1$sdev^2 / sum(pca1$sdev^2)
+# Calcular a proporção acumulada da variabilidade explicada
+cumulative_pve1 <- cumsum(prop_var1)
+
+# Plotar a proporção da variância explicada por cada componente principal
+#plot(prop_var, xlab = "Componente Principal",
+#     ylab = "Proporção da Variância Explicada", ylim = c(0, 1),
+#     type = "b")
+
+# Plotar a proporção acumulada da variância explicada
+plot(cumulative_pve1, xlab = "Componente Principal",
+     ylab = "Prop. da Variância Exp. Acumulada",
+     ylim = c(0, 1), type = "b")
+```
+
+Neste ponto já é possível perceber que houve um salto de qualidade significativo na aplicação do ACP aos dados padronizados. É possível observar que a proporção de variância explicada dos dados encontra-se distribuída ao longo de 13 componentes principais.
+
+Ocorre que a análise dos componentes principais surge como um mecanismo de redução de dimensionalidade dos dados. Ora, sendo a redução da dimensionalidade o principal objectivo do uso deste artifício, não faz sentido reter as 13 componentes principais, haja vista que isto seria equivalente ao número de colunas do data set (excetuando-se Cultivars que foi eliminada neste ponto) e portanto não nos auxiliaria.
+
+Soma-se a isso o fato de que alguns componentes principais, nomeadamente do 8 em diante, não possuem percentual expressivo de proporção de variância explicada para os dados apresentados, conforme podemos depreender da análise do screeplot a seguir:
+
+```{r}
+# Converter a proporção para porcentagem
+prop_var_percent <- prop_var1 * 100
+
+# Criar um data frame para plotagem
+pca_var_df <- data.frame(Componente = 1:length(prop_var_percent), Proporcao = prop_var_percent)
+
+ggplot(pca_var_df, aes(x = Componente, y = Proporcao)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  labs(title = "Scree Plot", x = "Componente Principal", y = "Proporção da Variância Explicada (%)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+#### Escolha do número de Componentes Principais que serão retidos:
+
+Demonstramos anteriormente a razão de não haver utilidade em reter todos os componentes gerados pelo modelo. Desta feita, surge então a necessidade de decidir quantos componentes principais serão retidos na análise.
+
+Para tanto, por mais discricionário que pareça, existem métodos que podem nortear esta escolha de modo a auxiliar o cientista de dados quando da aplicação da ACP.
+
+**Método 1: Critério de Kaiser**
+
+Este critério sugere reter apenas os componentes principais que apresentem variância maior ou igual a 1. Segundo este critério, isto indica que o componente retém mais variância do que qualquer variável original padronizada, o que implica que ele contribui significativamente para explicar a variância total dos dados. 
+
+**Método 2: Análise da Proporção de Variância Explicada Acumulada**
+Conforme veremos na tabela a seguir, ao optarmos pelo critério de Kaiser não seria aconselhável reter mais do que as 3 primeiras componentes principais no caso em tela. Desta feita, optaremos neste estudo pela utilização do método de retenção de componentes principais de acordo com a proporção de variância explicada que cada uma tem.
+
+Isto posto, se optassemos por reter apenas as 3 primeiras componentes principais - o que seria aconselhável caso fossemos utilizar o critério de Kaiser - teríamos apenas 66% da vari6ancia total do conjunto de dados sendo explicada pelos nossos componentes principais, o que nos parece pouco e poderia levar-nos a perder uma parte significativa dos padrões e insights presentes nos dados.
+
+
+```{r}
+# Obter o resumo da análise de componentes principais
+summ <- summary(pca1)
+
+# Obter a importância dos componentes principais
+importance1 <- summ$importance
+
+# Calcular os autovalores (variância explicada por cada componente principal)
+autovalores <- pca1$sdev^2
+pca_table <- data.frame(
+  Variancia = autovalores,
+  Prop_Var_Exp = importance1[2, ],
+  Prop_Var_Exp_Acum = importance1[3, ]
+)
+
+kable(pca_table, format = "latex", booktabs = TRUE, caption = "Proporção da Variância Explicada por Componente Principal") %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down")) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1:4, width = "3cm")
+```
+
+Logo, ao optarmos pelo método de maximização da proporção de variância explicada, que nos parece mais razoável ao caso em tela, **gostaríamos de obter ao menos 80% da variância total dos dados dentro das componentes principais definidas**, o que nos leva a um número mínimo de 5 PC's. 
+
+Entretanto, **o número de 6 PC's também nos parece razoável haja vista a proporção de variância explicada acumulada ser de 85% neste ponto, motivo pelo qual faremos a opção por reter 6 PC's.**
+
+
+##### Matriz de Loadings para a solução proposta:
+
+Haja vista termos em consideração como solução escolhida a retenção dos 6 primeiros componentes principais, não sendo tão esclarecedor realizar a demonstração de um biplot por termos mais do que 2 eixos, apresentaremos a seguir uma tabela com a matriz de loadings de cada um em relação às variáveis do data set, para análise e conclusões, de modo a facilitar a interpretação dos componentes principais em relação aos dados.
+
+A matriz de rotação(loadings) a seguir mostra como cada variável contribui para cada componente principal:
+
+
+```{r}
+# Selecionar os seis primeiros componentes principais da matriz de rotação
+pc <- pca1$rotation[, 1:6]
+
+# Criar um data frame para a tabela
+pc_df <- data.frame(
+  `PC1` = pc[,1],
+  `PC2` = pc[,2],
+  `PC3` = pc[,3],
+  `PC4` = pc[,4],
+  `PC5` = pc[,5],
+  `PC6` = pc[,6]
+)
+
+# Criar a tabela estilizada com kableExtra
+kable(pc_df, format = "latex", booktabs = TRUE, caption = "Componentes Principais") %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down")) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1:7, width = "3cm")
+```
+
+
+Aqui observa-se o seguinte:
+
+
+**PC1**:
+- `Flavanoids`, `Total_Phenols` e `ODB280` estão mais fortemente relacionados a este componente, pois têm os maiores valores absolutos.
+
+Todos os valores são negativos, sugerindo que à medida que o PC1 aumenta, a concentração de flavonoides e fenóis totais tende a diminuir, assim como o ODB280.
+
+**PC2**:
+- `Alcohol`, `Color_Intensity` e `Proline` estão mais fortemente relacionadas a este componente, com os maiores valores absolutos.
+
+Aqui os valores são negativos, sugerindo que à medida que o PC2 aumenta, a concentração de álcool tende a diminuir, bem como a intensidade da cor e a concentração de Prolina, o que corrobora com aquilo que fora apontado na análise exploratória da Secção 3.
+
+**PC3**:
+- `Ash` e `Ash_Alcanity` estão mais fortemente relacionadas a este componente, com os maiores valores absolutos. Isso sugere que à medida que o PC3 aumenta, ambas também devem aumentar.
+
+**PC4**:
+- `Malic_Acid` está mais fortemente relacionado a este componente, com o maior valor absoluto.
+
+Este valor é positivo, sugerindo que à medida que o PC4 aumenta, a concentração de Malic Acid tende a aumentar.
+
+- `Hue` também está mais fortemente relacionado a este componente, e apresenta valor negativo, o que nos diz que à medida em que PC4 aumenta, a intensidade da tonalidade do vinho tende a diminuir;
+
+**PC5**:
+- `Magnesium` está mais fortemente relacionado a este componente, com o maior valor absoluto.
+
+Este valor é negativo, sugerindo que à medida que o PC5 aumenta, a concentração de magnésio tende a diminuir.
+
+- `Nonflavanoid_Phenols` também encontra-se fortemente relacionada ao PC5, o que nos diz que à medida em que PC5 aumenta, Nonflavanoid_Phenols deve diminuir.
+
+**PC6**:
+- `Proanthocyanins` está mais fortemente relacionado a este componente, com o maior valor absoluto.
+
+Este valor é positivo, sugerindo que à medida que o PC6 aumenta, a concentração de proantocianidinas tende a aumentar.
+
+### 4.2 - Aplicação da Análise de Clusters:
+
+De agora em diante nos concentraremos na aplicação da análise de clusters com vistas a encontrar o melhor segmentação para os dados, de modo a agrupar vinhos semelhantes e criar grupos com bons valores de coesão interna e o mais distantes possíveis dos demais.
+
+#### 4.2.1 - Aplicação da Análise de Clusters aos componentes principais gerados anteriomente:
+
+O primeiro teste que faremos será a utilização dos componentes principais oriundos dos dados originais, conforme tratamento efetuado na Secção anterior deste relatório, com o fito de posteriormente comparar o agrupamento dos componentes principais com o agrupamento dos dados originais e perceber qual técnica foi a mais adequada ao caso em tela.
+
+
+Para esta parte da análise, utilizaremos os componentes principais advindos de pca1, os quais serão armazenados aqui em uma variável chamada pca_data. É salutar ressaltar que teremos em consideração apenas os 6 Componentes Principais que decidimos reter, os quais serão utilizados na análise de clusters proposta.
+
+#### 4.2.1.1 - Aplicação do K-Means aos componentes principais:
+
+Sabemos que existem diversas técnicas de análise de clusters, por isso nos manteremos fieis àquelas que foram ensinadas e aplicadas em sala de aula.
+
+A primeira delas - e que utilizaremos agora - é o K-Means. Trata-se de um algoritmo de clustering amplamente utilizado em análise de dados e aprendizado de máquina para particionar um conjunto de observações em $( k )$ clusters. Cada observação pertence ao cluster cujo centro (centroide) está mais próximo, servindo como um protótipo do cluster. O objectivo é minimizar a variabilidade dentro de cada cluster, medida pela soma das distâncias quadradas entre cada ponto e o centroide do seu cluster. O valor de $( k )$, que é o número de clusters desejado, deve ser especificado pelo usuário sendo esta uma das "desvantagens" da aplicação do K-Means em relação à abordagem hierárquica, que também será aplicada oportunamente nesta análise. Entretanto, esta desvantagem pode ser mitigada pelo uso de métodos como a curva do elbow ou o silhouette score.
+
+
+```{r}
+# Extrair os componentes principais
+pca_data <- pca1$x[, 1:6]
+```
+
+##### **Definição do número ideal de clusters por meio da aplicação das técnicas do silhouette score e curva de elbow.**
+
+A **curva do cotovelo (elbow curve)** é um método gráfico usado para determinar o número ideal de clusters numa análise de clustering. Ao aplicar o k-means, calcula-se a soma das distâncias quadradas dentro dos clusters (Within-Cluster Sum of Squares, WSS) para diferentes valores de $( k )$. Os valores de WSS são plotados contra o número de clusters. O ponto onde há uma diminuição abrupta na inclinação da curva é chamado de elbow (cotovelo em tradução livre) e indica o número apropriado de clusters, onde adicionar mais clusters além deste ponto não resulta numa redução significativa na variabilidade interna dos clusters.
+
+O **silhouette score** é uma métrica que avalia a qualidade dos clusters formados. Para cada ponto, calcula-se a diferença entre a distância média para os pontos do mesmo cluster $(a)$ e a distância média para os pontos do cluster mais próximo $(b)$, normalizando por $max(a, b)$. O resultado varia de -1 a 1, onde valores próximos de 1 indicam que os pontos estão bem agrupados, valores próximos de 0 indicam que os pontos estão na fronteira entre clusters, e valores negativos indicam que os pontos estão mal agrupados. O silhouette score médio para todos os pontos fornece uma medida global da qualidade do clustering. 
+
+**O silhouette score é considerado mais fiável do que a curva de elbow porque leva em conta tanto a coesão (quão próximos os pontos estão dentro do mesmo cluster) como a separação (quão distintos os clusters estão uns dos outros), de modo a proporcionar uma avaliação mais robusta e detalhada da qualidade dos clusters. Desta feita, os valores obtidos por meio do silhouette score terão peso maior nesta análise se comparados àqueles apontados pela curva de elbow**
+
+```{r}
+# Função para plotar a curva de elbow
+plot_elbow_curve <- function(data, max_clusters = 10) {
+  wss <- (nrow(data) - 1) * sum(apply(data, 2, var))
+  for (i in 2:max_clusters) {
+    wss[i] <- sum(kmeans(data, centers = i)$tot.withinss)
+  }
+  plot(1:max_clusters, wss, type = "b", xlab = "Número de clusters", ylab = "(WSS)",
+       main = "Curva de Elbow")
+}
+
+
+# Função para calcular e plotar o silhouette score
+plot_silhouette_score <- function(data, max_clusters = 10) {
+  avg_silhouette <- numeric(max_clusters)
+  for (i in 2:max_clusters) {
+    km_res <- kmeans(data, centers = i, nstart = 25)
+    silhouette_res <- silhouette(km_res$cluster, dist(data))
+    avg_silhouette[i] <- mean(silhouette_res[, 3])
+  }
+  plot(2:max_clusters, avg_silhouette[2:max_clusters], type = "b", xlab = "Número de clusters", ylab = "Silhouette Score Médio",
+       main = "Silhouette Score")
+}
+```
+
+
+```{r}
+# Plotar a curva do cotovelo
+plot_elbow_curve(pca_data)
+
+```
+
+Ao analisar a curva de elbow relativa aos componentes principais, nos parece claro que há uma tendência à escolha de $k=3$, vez que observa-se a formação do "cotovelo" neste ponto.
+
+Isto demonstra o bom ajuste dos componentes principais aos dados originais, haja vista que o conjunto de dados inicial wine possui uma variável categórica, qual seja Cultivars, que dividia o conjunto em 3 classes distintas.
+
+É salutar ressaltar que esta variável não foi considerada tanto na análise de componentes principais da Secção anterior, quanto nesta clusterização, para que não viesse a interferir nas análises.
+
+Ante o exposto, **caso optassemos por seguir o método da curva de elbow para definição de $k$ no $k$-Means, escolheríamos $k=3$.**
+
+
+Vejamos a seguir o que o silhouette score tem a nos dizer:
+
+```{r}
+# Plotar o silhouette score usando os componentes principais
+plot_silhouette_score(pca_data)
+```
+Neste ponto a lógica inverte-se: Se para a curva de elbow melhor seria o valor de $k$ quanto menor fosse o valor no eixo $y$ do gráfico, para o silhouette score quanto mais elevado for o valor apontado pelo eixo $y$ do gráfico, mais ajustado aos dados será o número de $k$ proposto.
+
+**É possível portanto enxergar que o silhouette score confirma a tendência apontada anteriormente na curva de elbow, e demonstra que devemos inicializar o $k$-Means em $K=3$ para obter um resultado que seja o mais próximo possível do ideal quando do agrupamento dos dados.**
+{{< pagebreak >}}
+
+#### Realização do K-Means com K=3:
+
+```{r}
+# Aplicar k-means aos componentes principais
+set.seed(43) 
+kmeans_res <- kmeans(pca_data, centers = 3, nstart = 25)
+```
+
+```{r}
+# Visualizar os clusters formados pelo k-means
+fviz_cluster(kmeans_res, data = pca_data, geom = "point", stand = FALSE,
+             ellipse.type = "convex", ggtheme = theme_minimal()) +
+  ggtitle("Clusters k-means para PC1 e PC2") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+**Informações importantes a respeito da visualização anterior:**
+
+> DIM1 (Eixo X) e DIM2 (Eixo Y): Estes são os dois primeiros componentes principais derivados do PCA. DIM1 diz respeito ao componente principal que captura a maior parte da variação dos dados, seguido por DIM2.
+
+> Percentagens associadas às dimensões: Estas porcentagens indicam a quantidade de variação dos dados originais explicada por cada componente principal. No caso em tela,  DIM1 explica 42,5% da variância total nos dados e DIM2 explica 22,6%. Juntos, esses dois componentes principais explicam 65,1% da variância total dos dados.
+
+> **Distribuição dos pontos dentro dos clusters:** Observa-se pela maneira em que os pontos estão distribuídos dentro das elipses que há um ótimo nível de compactação e coesão dos clusters. Vale mencionar a excelente definição do cluster 2, onde a maior parte dos pontos aparecem próximos ao centroide.
+
+> **Separação dos clusters:** Depreende-se da análise do gráfico que os clusters estão bem definidos e claramente separados, o que constitui um indicativo de que o k-means se saiu bem na tarefa de identificação de grupos distintos nos dados.
+
+{{< pagebreak >}}
+
+##### Análise das medidas de avaliação
+
+Apresentaremos a seguir as medidas de avaliação que serão utilizadas para comparar as diferentes aplicações do K-Means, tanto aos dados originais quanto aos componentes principais oriundos dos dados, conforme a presente Secção.
+
+Não teceremos comentários sobre estes números neste momento, pois eles servirão de base comparativa com as demais soluções. Na Secção da conclusão retornaremos a eles.
+
+```{r}
+# Calcular as medidas
+totss2 <- sum(kmeans_res$tot.withinss) + sum(kmeans_res$betweenss)
+total_withinss2 <- sum(kmeans_res$tot.withinss)
+betweenss2 <- sum(kmeans_res$betweenss)
+
+# Calcular a porcentagem de variância explicada
+var_explicada2 <- (betweenss2 / totss2) * 100
+
+# Criar dataframe com os dados agregados
+km_summary_agg2 <- data.frame(TotalSS = totss2, TotalWithinSS = total_withinss2, BetweenSS = betweenss2, VarianciaExplicada = var_explicada2)
+
+# Criar dataframe com os withinss para cada cluster
+km_summary_clusters2 <- data.frame(Cluster = 1:3, WithinSS = kmeans_res$withinss)
+
+# Transpor o dataframe km_summary_clusters2
+km_summary_clusters2_t <- t(km_summary_clusters2)
+km_summary_clusters2_t <- data.frame(km_summary_clusters2_t)
+names(km_summary_clusters2_t) <- paste0("Cluster", 1:3)
+row.names(km_summary_clusters2_t) <- c("Cluster", "WithinSS")
+
+# Criar tabela estilizada para os valores agregados
+km_table_agg2 <- kable(km_summary_agg2, format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Resumo Agregado do K-means em K=3") %>%
+  kable_styling(font_size = 12, latex_options = c("striped", "scale_down"), stripe_color = "gray!15")
+
+# Criar tabela estilizada para os withinss de cada cluster
+km_table_clusters2 <- kable(km_summary_clusters2_t, format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Resumo dos WithinSS do K-means em K=3") %>%
+  kable_styling(font_size = 12, latex_options = c("striped", "scale_down"), stripe_color = "gray!15")
+
+# Exibir as tabelas
+km_table_clusters2
+km_table_agg2
+
+```
+
+
+Ante todo o exposto é possível dizer que o algoritmo K-means aplicado aos 6 componentes principais derivados dos dados originais apresentou boa performance na tarefa de agrupamento desses dados, o que demonstra o poder de se aliar as duas técnicas para reduzir a dimensionalidade dos dados quando estes apresentam elevado número de atributos e, posteriormente, segmentá-los de maneira coesa e eficiente.
+
+#### 4.2.1.2 - Aplicação do K-Means aos dados originais standardizados:
+
+```{r}
+##Definindo o conj de dados standardizado que sera utilizado.
+scaled_data <- scale(wine_clean_subset)
+
+## estilizando tabela para relatorio
+scaled_data %>%
+  head() %>%
+  kable(format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Dados standardizados") %>%
+  kable_styling(font_size = 3.5, latex_options = c("striped", "scale_down"), stripe_color = "gray!15") %>%
+  column_spec(2, width = "1cm")
+```
+
+
+Na Secção 4.2.1.1 realizamos o agrupamento dos 6 componentes principais retidos dos dados originais. Para tanto, utilizamos apenas o algoritmo K-Means na tarefa de clusterização.
+
+De agora em diante retornaremos aos dados originais, com o fito de observar se os resultados obtidos no agrupamento serão melhores ou ao menos tão satisfatórios quanto aqueles obtidos após a aplicação da ACP.
+
+Ademais, faremos uso do data set original sem a variável categórica Cultivars, que encontra-se armazenado na variável "wine_clean_subset" no relatório em R. Entretanto, realizaremos a standardização desses dados, uma vez que tal procedimento demonstrou-se fundamental quando da análise exposta na Secção 4.1 do presente relatório, pois os dados possuem variáveis com escalas muito diferentes, o que demonstrou ter um impactos significativos na performance de algoritmos que não lidam bem com esse tipo de informação, como é o caso dos algoritmos utilizados na análise de clusters.
+
+Além do K-Means, para estes testes utilizaremos também a análise de clusters hierárquica de modo a perceber qual apresentará melhor resultado ou se os resultados de uma confirmam aquilo que fora encontrado na outra.
+
+##### **Definição do número ideal de clusters por meio da aplicação das técnicas do silhouette score e curva de elbow.**
+
+A seguir observaremos o comportamento da curva de elbow e do silhouette score para nos ajudar a definir $k$ na inicialização do K-Means.
+
+```{r}
+# Plotar a curva do cotovelo
+plot_elbow_curve(scaled_data)
+```
+Ao analisar a curva de elbow relativa aos componentes principais, mais uma vez há uma clara tendência à escolha de $k=3$, vez que observa-se a formação do "cotovelo" neste ponto. Entretanto, seguindo este método não nos parece errado também a solução com $k=4$.
+
+Ante o exposto, **caso optassemos por seguir o método da curva de elbow para definição de $k$ no $k$-Means, escolheríamos $k=3$ ou $k=4$.**
+
+Utilizaremos portanto o silhouette score para saber se há necessidade de testar a solução com $k=4$ ou se a diferença para $k=3$ será muito nítida neste método.
+
+```{r}
+# Plotar o silhouette score usando os componentes principais
+plot_silhouette_score(scaled_data)
+```
+Podemos enxergar que o silhouette score demonstra que $k=3$ tende a ser a solução mais próxima do ideal na aplicação do k-means aos dados originais standardizados.
+
+A queda abrupta nos valores do silhouette score médio quando passamos de 3 para 4 nos diz que muito provavelmente não será uma boa solução optar por $k=4$. 
+
+**Desta feita, antes de apontar $k=3$ como a melhor solução, analisaremos os números relativos à coesão intra-cluster e à heterogeneidade entre os grupos para decidir sobre a melhor solução.**
+
+#### Medidas de Avaliação do K-means
+
+Apresentamos a seguir uma rápida explanação sobre as medidas que serão utilizadas para comparar a performance de cada k-means desenvolvido.
+
+- **TotSS (Total Sum of Squares)**
+A soma total dos quadrados (TotSS) representa a variabilidade total presente nos dados originais. É a soma das distâncias quadráticas de cada ponto até a média global dos dados. Essa medida fornece uma visão geral da dispersão total dos dados antes de qualquer análise de clusters.
+
+- **TotalWithinSS (Total Within-Cluster Sum of Squares)**
+A soma total dos quadrados dentro dos clusters (TotalWithinSS) é a soma das distâncias quadráticas de cada ponto até o centro do seu respectivo cluster, somada para todos os clusters. Aqui, quanto menor o valor, mais compactos e homogêneos e melhores são os clusters.
+
+- **WithinSS (Within-Cluster Sum of Squares)**
+A soma dos quadrados dentro do cluster (WithinSS) é calculada individualmente para cada cluster. Representa a variabilidade dentro de um cluster específico, medindo o quão dispersos estão os pontos em relação ao centro do cluster. Valores menores indicam clusters mais compactos e portanto melhores.
+
+- **BetweenSS (Between-Cluster Sum of Squares)**
+A soma dos quadrados entre os clusters (BetweenSS) é a soma das distâncias quadráticas entre os centros dos clusters e a média global dos dados, ponderada pelo número de pontos em cada cluster. Esta medida reflete a separação entre os clusters; valores maiores indicam clusters mais bem separados e heterogêneos entre si.
+
+- **Percentagem de Variância Explicada**
+A variância explicada é a percentagem da variabilidade total (TotSS) que é explicada pela divisão dos dados em clusters. É calculada como a razão entre BetweenSS e TotSS, multiplicada por 100. Essa medida indica o quão bem os clusters formados explicam a variabilidade dos dados originais. Valores maiores sugerem uma melhor divisão dos dados em clusters, capturando mais da estrutura inerente aos dados.
+
+#### Aplicação do K-Means com K=3 para os dados originais standardizados:
+
+Além da definição do número de clusters a serem utilizados no algoritmo, o K-Means também necessita de outro parâmetro para sua correta aplicação: o n_start.
+
+O hiperparâmetro `nstart` no algoritmo k-means é responsável por controlar o número de inicializações aleatórias que o algoritmo tentará para encontrar os centróides iniciais. Em outras palavras, ele define quantas vezes o algoritmo irá iniciar o processo de agrupamento a partir de diferentes conjuntos aleatórios de centróides. 
+
+Neste ponto, quanto maior o valor de `nstart`, maior a probabilidade de o algoritmo encontrar uma solução globalmente melhor, mas isso também poderá afetar consideravelmente o tempo de execução. Portanto, a exemplo do que fizemos na Secção 4.2.1.1, onde utilizamos n_start=25, aplicaremos o mesmo aqui.
+
+```{r}
+# Aplicar k-means aos cdados originais standard com k=3
+set.seed(43) 
+kmeans_orig <- kmeans(scaled_data, centers = 3, nstart = 25)
+```
+
+
+**A seguir, os números associados a $k=3$:**
+
+```{r}
+# Calcular a porcentagem da variância explicada pelos clusters
+var_explicada <- (kmeans_orig$betweenss / kmeans_orig$totss) * 100
+
+#calcular demais medidas
+totss <- kmeans_orig$totss
+withinss <- kmeans_orig$withinss
+tot_withinss <- kmeans_orig$tot.withinss
+betweenss <- kmeans_orig$betweenss
+
+# Criar um dataframe para os valores agregados
+km_summary_agg <- data.frame(TotSS = totss, TotalWithinSS = tot_withinss, BetweenSS = betweenss, Variancia_Explicada = var_explicada)
+
+# Criar um dataframe para os valores específicos de cada cluster
+km_summary_clusters <- data.frame(Cluster = 1:3, WithinSS = withinss)
+
+# Transpor o dataframe km_summary_clusters
+km_summary_clusters_t <- t(km_summary_clusters)
+km_summary_clusters_t <- data.frame(km_summary_clusters_t)
+names(km_summary_clusters_t) <- paste0("Cluster", 1:3)
+row.names(km_summary_clusters_t) <- c("Cluster", "WithinSS")
+
+# Criar tabela estilizada para os valores agregados
+km_table_agg <- kable(km_summary_agg, format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Resumo Agregado do K-means em K=3") %>%
+  kable_styling(font_size = 12, latex_options = c("striped", "scale_down"), stripe_color = "gray!15")
+
+# Criar tabela estilizada para os valores específicos de cada cluster
+km_table_clusters <- kable(km_summary_clusters_t, format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Resumo dos Clusters do K-means em K=3") %>%
+  kable_styling(font_size = 12, latex_options = c("striped", "scale_down"), stripe_color = "gray!15")
+
+# Exibir as tabelas
+km_table_clusters
+km_table_agg
+
+```
+
+
+
+
+
+
+
+
+**De outro giro, quando definimos $k=4$, estes são os indicadores para avaliação:**
+```{r}
+# Aplicar k-means aos cdados originais standard com k=4
+set.seed(43) 
+kmeans_orig4 <- kmeans(scaled_data, centers = 4, nstart = 25)
+```
+
+```{r}
+
+# Calcular a porcentagem da variância explicada pelos clusters
+var_explicada4 <- (kmeans_orig4$betweenss / kmeans_orig4$totss) * 100
+
+# Extrair os dados
+totss4 <- kmeans_orig4$totss
+withinss4 <- kmeans_orig4$withinss
+tot_withinss4 <- kmeans_orig4$tot.withinss
+betweenss4 <- kmeans_orig4$betweenss
+
+# Criar um dataframe para os valores agregados
+km_summary_agg4 <- data.frame(TotSS = totss4, TotalWithinSS = tot_withinss4, BetweenSS = betweenss4, Variancia_Explicada = var_explicada4)
+
+# Criar um dataframe para os valores específicos de cada cluster
+km_summary_clusters4 <- data.frame(Cluster = 1:4, WithinSS = withinss4)
+
+# Transpor o dataframe km_summary_clusters4
+km_summary_clusters4_t <- t(km_summary_clusters4)
+km_summary_clusters4_t <- data.frame(km_summary_clusters4_t)
+names(km_summary_clusters4_t) <- paste0("Cluster", 1:4)
+row.names(km_summary_clusters4_t) <- c("Cluster", "WithinSS")
+
+# Criar tabela estilizada para os valores agregados
+km_table_agg4 <- kable(km_summary_agg4, format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Resumo Agregado do K-means em K=4") %>%
+  kable_styling(font_size = 12, latex_options = c("striped", "scale_down"), stripe_color = "gray!15")
+
+# Criar tabela estilizada para os valores específicos de cada cluster
+km_table_clusters4 <- kable(km_summary_clusters4_t, format = "latex", booktabs = TRUE, longtable = TRUE, caption = "Resumo dos Clusters do K-means em K=4") %>%
+  kable_styling(font_size = 12, latex_options = c("striped", "scale_down"), stripe_color = "gray!15")
+
+# Exibir as tabelas
+km_table_clusters4
+km_table_agg4
+
+
+```
+
+#### Comparação das Medidas de Avaliação para $K=3$ e $K=4$
+
+- **TotSS (Total Sum of Squares)**
+  - $K=3$: 23011
+  - $K=4$: 23011
+  - **Interpretação:** A TotSS é a mesma para $K=3$ e $K=4$, pois representa a variabilidade total dos dados originais e independe do número de clusters.
+
+- **TotalWithinSS (Total Within-Cluster Sum of Squares)**
+  - $K=3$: 1270.749
+  - $K=4$: 1168.614
+  - **Interpretação:** O TotalWithinSS é menor para $K=4$, o que indica que os clusters são mais homogéneos em $K=4$.
+
+- **WithinSS (Within-Cluster Sum of Squares)**
+  - $K=3$: [558.697, 385.698, 326.354]
+  - $K=4$: [307.097, 268.575, 302.992, 289.952]
+  - **Interpretação:** Cada cluster individualmnege considerado em $K=4$ possui um WithinSS menor ou comparável aos clusters em $K=3$, indicando novamente melhores números para $K=4$.
+
+- **BetweenSS (Between-Cluster Sum of Squares)**
+  - $K=3$: 1030.251
+  - $K=4$: 1132.386
+  - **Interpretação:** O BetweenSS é maior para $K=4$, o que sugere que os clusters estão mais bem separados quando optamos por 4 clusters.
+
+- **Variância Explicada**
+  - $K=3$: 44.774%
+  - $K=4$: 49.213%
+  - **Interpretação:** A variância explicada é maior em $K=4$, de modo a apontar que a divisão dos dados em 4 clusters captura de maneira mais fidedigna a estrutura dos dados originais.
+
+
+Por fim, com base nas medidas supramencionadas, $K=4$ parece ser a melhor escolha. Isso porque o TotalWithinSS é menor, o BetweenSS é maior, e a variância explicada é mais alta, indicando que provavelmente os clusters em $K=4$ são mais coesos internamente, melhor separados, e capturam mais da variabilidade dos dados.
+
+Isto contradiz os números apresentados pela curva de elbow e silhouette score, que apontavam para $k=3$ como a melhor solução.
+
+**Passaremos a seguir à clusterização hierárquica de modo a dirimir eventuais dúvidas e concluir aquele que parece ser o melhor desfecho para agrupar e segmentar os dados do data set wine, vez que a principal vantagem deste método sobre o K-Means diz respeito a não haver necessidade de se definir arbitrariamente o número de $K$ antes de inicializar o algoritmo.**
+
+#### 4.2.1.3 - Aplicação da clusterização hieráquica aos dados originais standardizados:
+
+A clusterização hierárquica é um método de agrupamento de dados que cria uma hierarquia de clusters, onde cada ponto começa como um cluster individual e é agrupado em clusters maiores à medida que o algoritmo prossegue. As vantagens desse método recaem sobre a sua capacidade de criar uma visão global da estrutura dos dados, sem a necessidade de especificar previamente o número de clusters, além da capacidade de representar clusters aninhados, o que pode ser útil em conjuntos de dados com estruturas complexas ou desconhecidas.
+{{< pagebreak >}}
+
+##### Métodos de aplicação da análise de Clusters hierárquica:
+
+- **Single Linkage (ligação única):**
+  - Baseia-se na distância mínima entre os pontos de dois clusters.
+  - A distância entre dois clusters é definida como a menor distância entre qualquer par de pontos, um de cada cluster.
+  - Tende a formar clusters alongados, sensíveis a ruídos e outliers.
+
+- **Average Linkage (ligação média):**
+  - Calcula a média das distâncias entre todos os pares de pontos, um de cada cluster.
+  - Menos sensível a outliers do que a ligação única.
+  - Pode resultar em clusters mais compactos e equilibrados.
+
+- **Complete Linkage (ligação completa):**
+  - Baseia-se na distância máxima entre os pontos de dois clusters.
+  - A distância entre dois clusters é definida como a maior distância entre qualquer par de pontos, um de cada cluster.
+  - Tende a produzir clusters mais compactos e esféricos, menos sensíveis a outliers do que a ligação única.
+
+Para facilitar o entendimento destes métodos, observemos a imagem a seguir:
+
+
+
+
+![retirado de https://www.researchgate.net/publication/281014334_Inference_of_a_human_brain_fiber_bundle_atlas_from_high_angular_resolution_diffusion_imaging em 30/05/2024](/Users/pedroh.mello/Desktop/MESTRADO_MCDE/ML NAO SUPERVISIONADO/PROJETO_FINAL/img_linkages.jpeg)!
+
+{{< pagebreak >}}
+
+##### Análise dos dendogramas para cada método:
+
+##### Dendograma - Single Linkage
+
+```{r, fig.width=10, fig.height=8, fig.cap='Clusters em single linkage'}
+# Executar a clusterização hierárquica
+hierarchical_single <- hclust(dist(scaled_data), method = "single")
+hierarchical_avg <- hclust(dist(scaled_data), method = "average")
+hierarchical_complete <- hclust(dist(scaled_data), method = "complete")
+
+
+# Plotar os dendrogramas com tamanho dobrado
+plot(hierarchical_single, main = "Dendrograma - Single Linkage", xlab = "", ylab = "Distância", cex=0.4)
+
+```
+
+O método single linkage aplicado aos dados wine standardizados não apresentou bons resultados. Conforme é possível notar, se comparado aos demais métodos esse foi o que produziu os clusters mais desequilibrados e sensíveis a outliers, não constituindo um bom indicador.
+{{< pagebreak >}}
+##### Dendograma - Average Linkage
+
+```{r, fig.width=10, fig.height=6, fig.cap='Em Amarelo: 3 clusters; Em Vermelho: 4 clusters'}
+plot(hierarchical_avg, main = "Dendrograma - Average Linkage", xlab = "", ylab = "Distância", cex = 0.4)
+
+# Traçar uma linha na altura desejada (por exemplo, 10)
+abline(h = 6.05, col = "red", lty = 2, lwd = 1.5)
+abline(h = 6.3, col = "yellow", lty = 2, lwd = 1.5)
+
+```
+Apresentou rrsultados melhores se comparados ao single linkage, entretanto ainda não parece bom o suficiente pois produziu grupos ainda desequilibrados.
+
+Além disso, como podemos ver ele quase não demonstra diferença na altura ao escolhermos 3 ou 4 clusters, o que não seria bom para a análise.
+{{< pagebreak >}}
+##### Dendograma - Complete Linkage
+
+```{r, fig.width=10, fig.height=6, fig.cap='Em Amarelo: 3 clusters; Em Vermelho: 4 clusters'}
+plot(hierarchical_complete, main = "Dendrograma - Complete Linkage", xlab = "", ylab = "Distância", cex = 0.4)
+
+#linha na altura desejada
+abline(h = 8.9, col = "red", lty = 2, lwd = 2)
+abline(h = 9.8, col = "yellow", lty = 2, lwd = 2)
+```
+Apesar de ainda não ser o idela, o complete linkage com o corte no nível de 4 grupos parece ser aquele que produz os grupos com maior coesão interna e distância dos demais.
+
+Isto confirma aquilo que fora aventado anteriormente no K-Means, de modo a demonstrar que a melhor solução para os dados aqui propostos, qual seja o conjunto de dados original standardizado, seria a partição em 4 clusters.
+
+Entretanto, conforme veremos a seguir, a clusterização hierárquica via complete linkage ainda não nos pareceu melhor que o K-Means aplicado aos componentes principais realizada na Secção 4.2.1.1 deste trabalho, vez que a definição dos grupos parece mais desequilibrada aqui nos clusters hierárquicos, a saber: 
+
+
+```{r, fig.height=6, fig.width=8}
+# Plotar os clusters usando Complete Linkage
+fviz_cluster(list(data = as.matrix(scaled_data), cluster = cutree(hierarchical_complete, 4)),
+             palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FC4E07", "#F10000"),
+             ellipse.type = "euclid",
+             star.plot = TRUE,
+             repel = TRUE,
+             main = "Cluster plot - Complete Linkage (4 grupos)",
+             ggtheme = theme_minimal()) +
+             theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+## Conclusões
+
+A análise realizada demonstrou que a combinação dos métodos de Análise
+de Componentes Principais (PCA) e k-means resultou na melhor solução
+para a segmentação dos dados. Especificamente, o k-means com $k = 3$
+sobre os componentes principais provou ser a abordagem mais eficaz. Esta
+combinação de métodos permitiu uma análise mais precisa e uma melhor
+separação dos clusters, comparando com outras abordagens testadas. A
+utilização de 6 componentes principais foi justificada pela captura de
+85% da variância total dos dados, o que facilitou a interpretação e
+reduziu a dimensionalidade sem perda significativa de informação.
+
+A escolha de  $k = 3$ em vez de $k = 4$ foi justificada através de
+uma análise detalhada das métricas de avaliação dos clusters. Apesar de
+$k = 4$ ter mostrado uma menor soma total dos quadrados dentro dos
+clusters (TotalWithinSS) e uma maior soma dos quadrados entre os
+clusters (BetweenSS), indicando clusters mais homogéneos internamente e
+mais separados entre si, a decisão final foi influenciada pela análise
+da curva de elbow e do silhouette score. A curva de elbow, que ajuda a
+identificar o ponto onde adicionar mais clusters deixa de proporcionar
+ganhos significativos na explicação da variância, sugeriu que $k = 3$
+era o ponto ideal, além do silhouette score, que mede quão semelhantes
+os objetos são ao seu próprio cluster em comparação ao cluster mais
+próximo, também ter indicado melhor desempenho para $k = 3$. Estas
+análises indicam que, embora $k = 4$ pudesse oferecer uma ligeira
+melhora nas métricas internas dos clusters, $k = 3$ proporciona um
+balanço mais adequado entre coesão interna e separação entre clusters,
+garantindo uma segmentação eficiente e significativa dos dados.
+
+Esta conclusão é apoiada pelas métricas de avaliação utilizadas, que
+mostraram que os números obtidos com a combinação de PCA e k-means foram
+superiores aos de outras combinações de métodos. Portanto, a aplicação
+dessas técnicas não supervisionadas demonstrou ser eficaz na análise e
+segmentação dos dados do conjunto de vinhos, contribuindo para uma
+melhor compreensão das características que distinguem os diferentes
+tipos de vinhos analisados.
+
+
+**O código fonte em R do presente trabalho consta ao link do reposiório a seguir: [Repositório GitHub](https://github.com/mello-pedro/SUPERV_ML_MCDE_23_24/blob/main/R_SOURCE_CODE_BIKE_SHARING.qmd).**
+
+```{r include = FALSE}
+#rm(list = ls())
+#gc()
+```
