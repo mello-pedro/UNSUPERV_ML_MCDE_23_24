@@ -1268,9 +1268,9 @@ melhor compreensão das características que distinguem os diferentes
 tipos de vinhos analisados.
 
 
-**O código fonte em R do presente trabalho consta ao link do reposiório a seguir: [Repositório GitHub](https://github.com/mello-pedro/SUPERV_ML_MCDE_23_24/blob/main/R_SOURCE_CODE_BIKE_SHARING.qmd).**
+**O código fonte em R do presente trabalho consta ao link do reposiório a seguir: [Repositório GitHub](https://github.com/mello-pedro/UNSUPERV_ML_MCDE_23_24/blob/main/wines_analysis.qmd).**
 
 ```{r include = FALSE}
-#rm(list = ls())
-#gc()
+rm(list = ls())
+gc()
 ```
